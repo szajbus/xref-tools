@@ -1,0 +1,92 @@
+#!/bin/bash
+
+# Use `mix xref` to analyze dependencies in mix projects.
+#
+# Examples:
+#
+#   Analyze all deps of given file
+#
+#     ./analyze_deps web/router.ex
+#
+#  Analyze only compile deps of given file
+#
+#     ./analyze_deps --label compile web/router.ex
+
+DIRECT_DEP_REGEX="^[├└]"
+LABEL_REGEX="."
+REMOVE_EDGES="s/^[^[:alpha:]]+//"
+REMOVE_FILE="s/^[^\(]+//"
+REMOVE_LABEL="s/\(.+\)$//"
+ADD_RUNTIME_LABEL="s/([^)])$/\1 (runtime)/"
+LABEL=""
+POSITIONAL=()
+
+while [[ $# -gt 0 ]]; do
+  arg="$1"
+
+  case $arg in
+    -l|--label)
+      LABEL="$2"
+      LABEL_REGEX="(${LABEL})$"
+      shift; shift
+      ;;
+    *)
+      POSITIONAL+=("$1")
+      shift
+    ;;
+  esac
+done
+
+set -- "${POSITIONAL[@]}"
+SOURCE=$1
+
+function get_deps() {
+  mix xref graph --no-compile --source $1 \
+    | grep "$DIRECT_DEP_REGEX" \
+    | sed -r "$ADD_RUNTIME_LABEL" \
+    | sed -r "$REMOVE_EDGES" \
+    | grep "$LABEL_REGEX" \
+    | sort | uniq
+}
+
+function get_tree_size() {
+  mix xref graph --no-compile --source $1 \
+    | sed -r "$REMOVE_EDGES" \
+    | sed -r "$REMOVE_LABEL" \
+    | sort | uniq | wc -l
+}
+
+function get_file() {
+  echo $1 | sed -r "$REMOVE_LABEL"
+}
+
+function get_label() {
+  echo $1 | sed -r "$REMOVE_FILE"
+}
+
+cat << EOF
+Analyzing dependencies (${LABEL:-all}) for ${SOURCE}
+
+Calculating subtree size of each dependency.
+For compile dependencies, if any file in the subtree changes,
+${SOURCE} would need to be recompiled.
+
+Pay attention to large subtrees as they _may_ indicate potential
+issues with your code. Investigating them further and possibly
+eliminating some unnecessary dependencies in such subtrees may
+yield substantial benefits to your project's recompilation.
+
+ size | dependency
+------|------------
+EOF
+
+set -- $(get_deps $SOURCE)
+
+while [[ $# -gt 0 ]]; do
+  file=$1
+  label=$2
+  shift; shift
+
+  printf %5s $(get_tree_size $file)
+  echo " | $file $label"
+done
