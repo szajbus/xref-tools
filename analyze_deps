@@ -41,7 +41,12 @@ while [[ $# -gt 0 ]]; do
       shift; shift
       ;;
     *)
-      POSITIONAL+=("$1")
+      if [[ -z $CMD ]]; then
+        CMD="$1";
+      else
+        POSITIONAL+=("$1")
+      fi
+
       shift
     ;;
   esac
@@ -76,7 +81,24 @@ function get_label() {
   echo $1 | sed -r "$REMOVE_FILE"
 }
 
-cat << EOF
+case $CMD in
+  list)
+    cat << EOF
+Listing dependencies (${LABEL:-all}) for ${SOURCE}
+EOF
+
+    set -- $(get_deps $SOURCE)
+
+    while [[ $# -gt 0 ]]; do
+      file=$1
+      label=$2
+      shift; shift
+
+      echo "$file $label"
+    done
+    ;;
+  subtree)
+    cat << EOF
 Analyzing dependencies (${LABEL:-all}) for ${SOURCE}
 
 Calculating subtree size of each dependency.
@@ -92,13 +114,19 @@ yield substantial benefits to your project's recompilation.
 ------|------------
 EOF
 
-set -- $(get_deps $SOURCE)
+    set -- $(get_deps $SOURCE)
 
-while [[ $# -gt 0 ]]; do
-  file=$1
-  label=$2
-  shift; shift
+    while [[ $# -gt 0 ]]; do
+      file=$1
+      label=$2
+      shift; shift
 
-  printf %5s $(get_tree_size $file)
-  echo " | $file $label"
-done
+      printf %5s $(get_tree_size $file)
+      echo " | $file $label"
+    done
+
+    ;;
+  *)
+    echo "Unknown command: $CMD"
+    exit 1
+esac
