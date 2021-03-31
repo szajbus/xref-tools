@@ -1,16 +1,25 @@
 #!/bin/bash
 
-# Use `mix xref` to analyze dependencies in mix projects.
-#
-# Examples:
-#
-#   Analyze all deps of given file
-#
-#     ./analyze_deps web/router.ex
-#
-#  Analyze only compile deps of given file
-#
-#     ./analyze_deps --label compile web/router.ex
+me=`basename "$0"`
+
+function help() {
+  cat << EOF
+Dependency analysis tool for mix projects via \`mix xref\` task
+
+Usage:
+  $me <command> [<args>]
+
+Available commands:
+  list <source>             List direct dependencies of source file
+  subtree <source>          Calculate subtree sizes of source file's dependencies
+
+Common options (optional):
+  --include <pattern>                 Include only dependencies matching pattern
+  --exclude <pattern>                 Exclude dependencies matching pattern
+  --label <compile|export|runtime>    Include only dependencies of certain type
+
+EOF
+}
 
 DIRECT_DEP_REGEX="^[├└]"
 LABEL_REGEX="."
@@ -40,6 +49,9 @@ while [[ $# -gt 0 ]]; do
       EXCLUDE="$2"
       shift; shift
       ;;
+    -h|--help)
+      CMD="help"; shift
+      ;;
     *)
       if [[ -z $CMD ]]; then
         CMD="$1";
@@ -52,6 +64,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+CMD=${CMD:-help}
 set -- "${POSITIONAL[@]}"
 SOURCE=$1
 
@@ -82,9 +95,13 @@ function get_label() {
 }
 
 case $CMD in
+  help)
+    help
+    ;;
   list)
     cat << EOF
-Listing dependencies (${LABEL:-all}) for ${SOURCE}
+Listing direct dependencies (${LABEL:-all}) of ${SOURCE}
+
 EOF
 
     set -- $(get_deps $SOURCE)
@@ -99,7 +116,7 @@ EOF
     ;;
   subtree)
     cat << EOF
-Analyzing dependencies (${LABEL:-all}) for ${SOURCE}
+Analyzing direct dependencies (${LABEL:-all}) of ${SOURCE}
 
 Calculating subtree size of each dependency.
 For compile dependencies, if any file in the subtree changes,
@@ -128,5 +145,7 @@ EOF
     ;;
   *)
     echo "Unknown command: $CMD"
+    echo
+    help
     exit 1
 esac
